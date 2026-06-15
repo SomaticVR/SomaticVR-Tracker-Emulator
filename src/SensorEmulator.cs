@@ -21,12 +21,7 @@
     THE SOFTWARE.
 */
 
-using System;
-using System.Net;
-using System.Net.Sockets;
 using System.Numerics;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace SomaticVR.TrackerEmulator
 {
@@ -144,32 +139,23 @@ namespace SomaticVR.TrackerEmulator
 
         public SensorDataType dataType {get; private set;} = SensorDataType.SENSOR_DATATYPE_ROTATION; 
         public Quaternion rotation {get; private set;} 
-
+        
+        public Vector3 acceleration { get; private set;}
         public SensorEmulator(byte sensorIndex, Quaternion? initialRotation = null)
         {
             index = sensorIndex;
-            rotation = initialRotation ?? Quaternion.CreateFromAxisAngle(Vector3.UnitX, (float)Math.PI/2);
+            rotation = initialRotation ?? Quaternion.CreateFromAxisAngle(Vector3.UnitX, (float)Math.PI / 2);
         }
 
         public void UpdateRotationAsync()
         {
             Random rnd = new Random();
             const double offsetMax = 0.005f;
-            // Quaternion randomRotation = new Quaternion(
-            //     (float)(rnd.NextDouble() * 2 * offsetMax - offsetMax), // X in [-offsetMax, offsetMax]
-            //     (float)(rnd.NextDouble() * 2 * offsetMax - offsetMax), // Y in [-offsetMax, offsetMax]
-            //     (float)(rnd.NextDouble() * 2 * offsetMax - offsetMax), // Z in [-offsetMax, offsetMax]
-            //     (float)(rnd.NextDouble() * 2 * offsetMax - offsetMax)  // W in [-offsetMax, offsetMax]
-            // );
-            // Quaternion randomRotation = new Quaternion(
-            //     (float)(rnd.NextDouble() * 2 * offsetMax - offsetMax), // X in [-offsetMax, offsetMax]
-            //     0.0f, // Y in [-offsetMax, offsetMax]
-            //     0.0f, // Z in [-offsetMax, offsetMax]
-            //     0.0f  // W in [-offsetMax, offsetMax]
-            // );
             Quaternion randomRotation = Quaternion.CreateFromYawPitchRoll((float)(rnd.NextDouble() * 2 * offsetMax - offsetMax), (float)(rnd.NextDouble() * 2 * offsetMax - offsetMax), (float)(rnd.NextDouble() * 2 * offsetMax - offsetMax));
             rotation = randomRotation * rotation; // Apply random rotation to current rotation
             rotation = Quaternion.Normalize(rotation); // Normalize to ensure valid quaternion
+            // Simulate a constant acceleration vector, but rotation it based on the current sensor rotation
+            acceleration = Vector3.Transform(new Vector3(0, 0, -9.81f), rotation);
             // Console.WriteLine($"Sensor {index}: Updated rotation to {rotation}");
         }
 

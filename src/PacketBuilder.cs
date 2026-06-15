@@ -25,6 +25,7 @@ using System;
 using System.IO;
 using System.Net.NetworkInformation;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace SomaticVR.TrackerEmulator
@@ -124,10 +125,27 @@ namespace SomaticVR.TrackerEmulator
             return ms.ToArray();
         }
 
-        public static byte[] BuildAccelerationPacket(/* params */)
+        public static byte[] BuildAccelerationPacket(byte sensorId, Int64 packetNumber, Vector3 acceleration)
         {
-            // TODO: Implement Acceleration packet (ID 4)
-            throw new NotImplementedException();
+            using var ms = new MemoryStream();
+            using var bw = new BinaryWriter(ms);
+            // Packet ID (int32, big endian)
+            bw.Write(BitConverter.GetBytes(4).Reverse().ToArray());
+            // Packet number (int64, always 0)
+            bw.Write(BitConverter.GetBytes(packetNumber).Reverse().ToArray());
+            BuildAccelerationInnerPacket(bw, sensorId, acceleration);
+            // Console.WriteLine($"Sending data {BitConverter.ToString(ms.ToArray())}");
+            return ms.ToArray();
+        }
+        
+        public static void BuildAccelerationInnerPacket(BinaryWriter bw, byte sensorId, Vector3 acceleration)
+        {
+            // Rotation quaternion (4 x float)
+            bw.Write(BitConverter.GetBytes(acceleration.X).Reverse().ToArray());
+            bw.Write(BitConverter.GetBytes(acceleration.Y).Reverse().ToArray());
+            bw.Write(BitConverter.GetBytes(acceleration.Z).Reverse().ToArray());
+            // Sensor ID (byte)
+            bw.Write((byte)sensorId);
         }
 
         public static byte[] BuildPingPongPacket(byte[] packet)
@@ -244,8 +262,16 @@ namespace SomaticVR.TrackerEmulator
 
         public static byte[] BuildFeatureFlagsPacket(/* params */)
         {
-            // TODO: Implement Feature Flags packet (ID 22)
-            throw new NotImplementedException();
+            using var ms = new MemoryStream();
+            using var bw = new BinaryWriter(ms);
+            // Packet ID (int32, big endian)
+            bw.Write(BitConverter.GetBytes(22).Reverse().ToArray());
+            // Send the 'Firmware' feature flags
+            byte featureFlags = 0b00000001; // Wifi Scanning Enabled
+            featureFlags |= 0b00000010; // Sensor Config Enabled
+            bw.Write(featureFlags);
+            // Console.WriteLine($"Sending data {BitConverter.ToString(ms.ToArray())}");
+            return ms.ToArray();
         }
 
         public static byte[] BuildRotationAndAccelerationPacket(/* params */)
