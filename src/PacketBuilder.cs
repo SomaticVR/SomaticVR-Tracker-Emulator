@@ -64,8 +64,8 @@ namespace SomaticVR.TrackerEmulator
         {
             using var ms = new MemoryStream();
             using var bw = new BinaryWriter(ms);
-            // Packet ID for Handshake is first byte
-            bw.Write(BitConverter.GetBytes(1).Reverse().ToArray());
+            // Packet ID for Heartbeat is first byte
+            bw.Write(BitConverter.GetBytes(0).Reverse().ToArray());
             // Packet number (int64, always 0)
             bw.Write(new byte[8]);
 
@@ -82,14 +82,16 @@ namespace SomaticVR.TrackerEmulator
             bw.Write(BitConverter.GetBytes(3).Reverse().ToArray());
             // Packet number (int64, always 0)
             bw.Write(new byte[8]);
-            // IMU type (int32, big endian)
-            bw.Write(BitConverter.GetBytes(9).Reverse().ToArray()); // ICM-20948
-            // MCU type (int32)
-            bw.Write(BitConverter.GetBytes(6).Reverse().ToArray()); // MCU_ESP32_C3
-			// Backwards compatibility, unused IMU data
-            bw.Write(BitConverter.GetBytes(0).Reverse().ToArray()); // Unused
-            bw.Write(BitConverter.GetBytes(0).Reverse().ToArray()); // Unused
-            bw.Write(BitConverter.GetBytes(0).Reverse().ToArray()); // Unused
+            // Board type (int32, big endian)
+            bw.Write(BitConverter.GetBytes(27).Reverse().ToArray()); // 
+            // IMU type (short, big endian)
+            bw.Write(BitConverter.GetBytes(4).Reverse().ToArray()); // ICM-20948
+            // MCU type (short, big endian)
+            bw.Write(BitConverter.GetBytes(2).Reverse().ToArray()); // MCU_ESP32_C3
+            // Backwards compatibility, unused IMU data
+            bw.Write(BitConverter.GetBytes(0).ToArray()); // Unused
+            bw.Write(BitConverter.GetBytes(0).ToArray()); // Unused
+            bw.Write(BitConverter.GetBytes(0).ToArray()); // Unused
             // Protocol version (int32, big endian)
             bw.Write(BitConverter.GetBytes(21).Reverse().ToArray());
             // Firmware string length (byte)

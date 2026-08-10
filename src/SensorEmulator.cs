@@ -131,10 +131,10 @@ namespace SomaticVR.TrackerEmulator
 
             // State (byte)
         public SensorStatus state {get; private set;} = SensorStatus.SENSOR_OK;
-        public SensorTypeID type {get; private set;} = SensorTypeID.ICM20948;
+        public SensorTypeID type {get; private set;} = SensorTypeID.BNO085;
 
-        public SensorConfigBits configData {get; private set;} = (SensorConfigBits)0;
-        public bool hasCompletedRestCalibration { get; private set; } = true;
+        public SensorConfigBits configData {get; private set;} = (SensorConfigBits)6;
+        public bool hasCompletedRestCalibration { get; private set; } = false;
         public SensorPosition position {get; set;} = SensorPosition.POSITION_NO; // Default position is "no position"
 
         public SensorDataType dataType {get; private set;} = SensorDataType.SENSOR_DATATYPE_ROTATION; 
@@ -145,18 +145,6 @@ namespace SomaticVR.TrackerEmulator
         {
             index = sensorIndex;
             rotation = initialRotation ?? Quaternion.CreateFromAxisAngle(Vector3.UnitX, (float)Math.PI / 2);
-        }
-
-        public void UpdateRotationAsync()
-        {
-            Random rnd = new Random();
-            const double offsetMax = 0.005f;
-            Quaternion randomRotation = Quaternion.CreateFromYawPitchRoll((float)(rnd.NextDouble() * 2 * offsetMax - offsetMax), (float)(rnd.NextDouble() * 2 * offsetMax - offsetMax), (float)(rnd.NextDouble() * 2 * offsetMax - offsetMax));
-            rotation = randomRotation * rotation; // Apply random rotation to current rotation
-            rotation = Quaternion.Normalize(rotation); // Normalize to ensure valid quaternion
-            // Simulate a constant acceleration vector, but rotation it based on the current sensor rotation
-            acceleration = Vector3.Transform(new Vector3(0, 0, -9.81f), rotation);
-            // Console.WriteLine($"Sensor {index}: Updated rotation to {rotation}");
         }
 
     }

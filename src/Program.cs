@@ -22,6 +22,7 @@
 */
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SomaticVR.TrackerEmulator
@@ -31,27 +32,107 @@ namespace SomaticVR.TrackerEmulator
         static async Task Main(string[] args)
         {
             Console.WriteLine("Starting SomaticVR Tracker Emulator...");
-            uint trackerCount = 10;
-            uint sensorsPerTracker = 1;
-            if (args.Length > 0)
+
+            var manager = new TrackerManager();
+
+            // Initial state
+            EmulationStage currentStage = EmulationStage.InfoPacket;
+
+            while (true)
             {
-                if (!uint.TryParse(args[0], out trackerCount))
+                switch (currentStage)
                 {
-                    Console.WriteLine($"Invalid tracker count '{args[0]}', using default: 10");
-                    trackerCount = 10;
+                    case EmulationStage.InfoPacket:
+                        await RunInfoPacketStage(manager);
+                        currentStage = EmulationStage.FullReset;
+                        break;
+
+                    case EmulationStage.FullReset:
+                        await RunUserTriggeredStage(
+                            manager,
+                            EmulationStage.FullReset,
+                            "Please start the FULL RESET in the SomaticVR GUI then press SPACE when complete."
+                        );
+                        currentStage = EmulationStage.ResetMounting;
+                        break;
+
+                    case EmulationStage.ResetMounting:
+                        await RunUserTriggeredStage(
+                            manager,
+                            EmulationStage.ResetMounting,
+                            "Please start the RESET MOUNTING in the SomaticVR GUI then press SPACE when complete."
+                        );
+                        currentStage = EmulationStage.SendData;
+                        break;
+
+                    case EmulationStage.SendData:
+                        await RunUserTriggeredStage(
+                            manager,
+                            EmulationStage.SendData,
+                            "Sending Packet data to the SomaticVR GUI, press SPACE when complete."
+                        );
+                        return; // Finished all stages
                 }
             }
-            if (args.Length > 1)
+        }
+
+        // --- STAGE HANDLERS ----------------------------------------------------
+
+        static async Task RunInfoPacketStage(TrackerManager manager)
+        {
+            try
             {
-                if (!uint.TryParse(args[1], out sensorsPerTracker))
-                {
-                    Console.WriteLine($"Invalid sensors per tracker '{args[1]}', using default: 1");
-                    sensorsPerTracker = 1;
-                }
+                Console.WriteLine("Sending SensorInfo packets...");
+                await manager.SendInfoPacketsAsync();
+                Console.WriteLine("All trackers acknowledged SensorInfo.");
             }
-            Console.WriteLine($"Tracker count: {trackerCount}, Sensors per tracker: {sensorsPerTracker}");
-            var manager = new TrackerManager(trackerCount, sensorsPerTracker);
-            await manager.StartAsync();
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending info packets: {ex.Message}");
+                Environment.Exit(1);
+            }
+        }
+
+        static async Task RunUserTriggeredStage(
+            TrackerManager manager,
+            EmulationStage stage,
+            string userPrompt)
+        {
+            Console.WriteLine();
+            Console.WriteLine(userPrompt);
+            Console.WriteLine();
+
+            var cts = new CancellationTokenSource();
+            var task = manager.SendDataPacketsAsync(stage, cts.Token);
+
+            while (!task.IsCompleted)
+            {
+                if (Console.KeyAvailable)
+                {
+                    var key = Console.ReadKey(intercept: true);
+                    if (key.Key == ConsoleKey.Spacebar)
+                    {
+                        Console.WriteLine($"{stage} packets cancelled by user.");
+                        cts.Cancel();
+                        break;
+                    }
+                }
+
+                await Task.Delay(50);
+            }
+
+            // Flush input buffer so next stage doesn't auto-cancel
+            while (Console.KeyAvailable)
+                Console.ReadKey(intercept: true);
+
+            try
+            {
+                await task;
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine($"{stage} stage cancelled.");
+            }
         }
     }
 }

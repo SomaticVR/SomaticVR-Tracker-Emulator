@@ -38,23 +38,27 @@ namespace SomaticVR.TrackerEmulator
         private CancellationTokenSource? _timeoutMonitorCts;
         private CancellationTokenSource? _listenCts;
         private readonly uint _trackerIndex;
-        private readonly byte _trackerType = 0; // TRACKER_TYPE_SVR_ROTATION
+        // private readonly byte _trackerType = 0; // TRACKER_TYPE_SVR_ROTATION
         private readonly uint _numSensors;
         private readonly List<SensorEmulator> _sensors = new();
         private readonly UdpClient _udpClient;
         private IPEndPoint? _serverEndpoint;
         private readonly byte[] _macAddress;
+        public readonly string macAddressString;
+        public bool SensorInfoAckReceived { get; private set; } = false;
+
         private Int64 _packetNumber = 0; // Incremented for each packet sent
         private const int BroadcastPort = 6969; // Default SlimeVR UDP port
         private bool _receivedServerFeatureFlags = false;
 
 
-        public TrackerEmulator(uint trackerIndex, uint numSensors)
+        public TrackerEmulator(uint trackerIndex, uint numSensors, byte[] macAddress)
         {
             _trackerIndex = trackerIndex;
             _numSensors = numSensors;
             _udpClient = new UdpClient(0) { EnableBroadcast = true }; // Bind to any available local port
-            _macAddress = GenerateMacAddress(trackerIndex);
+            _macAddress = macAddress;
+            macAddressString = BitConverter.ToString(macAddress);
             for (byte i = 0; i < _numSensors; i++)
             {
                 var sensor = new SensorEmulator(i);
@@ -62,55 +66,45 @@ namespace SomaticVR.TrackerEmulator
             }
         }
 
-        public async Task StartAsync()
+        public async Task SendInfoPacketAsync()
         {
-            var cts = new CancellationTokenSource();
-            while (true)
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            bool foundServer = await TryFindServerAsync(cts.Token);
+            if (!foundServer)
             {
-                // Ensure any previous background tasks are cancelled and state is reset
-                _timeoutMonitorCts?.Cancel();
-                _timeoutMonitorCts?.Dispose();
-                _timeoutMonitorCts = null;
-                _listenCts?.Cancel();
-                _listenCts?.Dispose();
-                _listenCts = null;
-                _serverEndpoint = null;
-                _receivedServerFeatureFlags = false;
+                throw new Exception($"Tracker {_trackerIndex}: Failed to find server after 10 seconds.");
+            }
 
-                bool foundServer = await TryFindServerAsync(cts.Token);
-                if (!foundServer)
+            foreach (var sensor in _sensors)
+            {
+                Console.WriteLine($"Tracker {_trackerIndex}: Sending SensorInfo packet for Sensor {sensor.index}...");
+                var sensorInfoPacket = PacketBuilder.BuildSensorInfoPacket(_packetNumber++, sensor);
+
+                if (_serverEndpoint != null)
                 {
-                    Console.WriteLine($"Tracker {_trackerIndex}: Failed to find server after 30 seconds. Exiting.");
-                    Environment.Exit(1);
+                    await _udpClient.SendAsync(sensorInfoPacket, sensorInfoPacket.Length, _serverEndpoint);                    
                 }
+            }
+        }
 
-                // Send Sensor Info packet
-                foreach (var sensor in _sensors)
-                {
-                    var sensorInfoPacket = PacketBuilder.BuildSensorInfoPacket(_packetNumber++, sensor);
-                    if (_serverEndpoint != null)
-                    {
-                        await _udpClient.SendAsync(sensorInfoPacket, sensorInfoPacket.Length, _serverEndpoint);
-                    }
-                }
+        public async Task SendDataPacketAsync(byte[] packetData)
+        {
+            if (_serverEndpoint != null)
+            {
+                await _udpClient.SendAsync(packetData, packetData.Length, _serverEndpoint);
+                return;
+            }
 
-                // Start listening for server packets with a new CTS
-                _listenCts = new CancellationTokenSource();
-                _ = ListenForServerAsync(_listenCts.Token);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            bool foundServer = await TryFindServerAsync(cts.Token);
+            if (!foundServer)
+            {
+                throw new Exception($"Tracker {_trackerIndex}: Failed to find server after 10 seconds.");
+            }
 
-                // Start heartbeat monitor
-                _timeoutMonitorCts = new CancellationTokenSource();
-                var monitorTask = MonitorPacketTimeAsync(_timeoutMonitorCts.Token);
-
-                // Start sending rotation data
-                while (_serverEndpoint != null)
-                {
-                    await SendRotationAsync();
-                    await Task.Delay(10); // 100Hz
-                }
-
-                // If we get here, heartbeat timed out, so restart server discovery
-                Console.WriteLine($"Tracker {_trackerIndex}: Heartbeat timeout. Restarting server discovery.");
+            if (_serverEndpoint != null)
+            {
+                await _udpClient.SendAsync(packetData, packetData.Length, _serverEndpoint);
             }
         }
 
@@ -119,7 +113,7 @@ namespace SomaticVR.TrackerEmulator
         {
             for (int attempt = 1; attempt <= 30; attempt++)
             {
-                Console.WriteLine($"Tracker {_trackerIndex}: Attempt {attempt}/30 to find server...");
+                //Console.WriteLine($"Tracker {_trackerIndex}: Attempt {attempt}/30 to find server...");
                 await SendHandshakeAsync();
                 var found = await WaitForServerAsync(1000, cancellationToken);
                 if (found)
@@ -214,13 +208,11 @@ namespace SomaticVR.TrackerEmulator
             switch (packetId)
             {
                 case 1: // Heartbeat
-                    // Console.WriteLine($"Received Heartbeat from {remote}");
+                    //Console.WriteLine($"Received Heartbeat from {remote}");
                     packet = PacketBuilder.BuildHeartbeatPacket();
                     break;
                 case 3: // Handshake response
-                    Console.WriteLine($"Received Handshake response from {remote}");
-                    // Start sending feature flags as a background task
-                    _ = SendFeatureFlagsPacketAsync();
+                    //Console.WriteLine($"Received Handshake response from {remote}");
                     break;
                 case 10: // Ping/Pong
                     // Console.WriteLine($"Received Ping/Pong from {remote}");
@@ -228,6 +220,7 @@ namespace SomaticVR.TrackerEmulator
                     break;
                 case 15: // Sensor Info ACK
                     Console.WriteLine($"Received Sensor Info ACK from {remote}");
+                    SensorInfoAckReceived = true;
                     // SensorInfoPacket sensorInfoPacket;
                     // memcpy(&sensorInfoPacket, m_Packet + 4, sizeof(sensorInfoPacket));
 
@@ -263,49 +256,6 @@ namespace SomaticVR.TrackerEmulator
             if (packet != null && _serverEndpoint != null)
             {
                 _udpClient.SendAsync(packet, packet.Length, _serverEndpoint);
-            }
-        }
-
-        async Task SendRotationAsync()
-        {
-            foreach (var sensor in _sensors)
-            {
-                sensor.UpdateRotationAsync(); // Update each sensor's rotation
-                // Console.WriteLine($"Tracker {_trackerIndex}: Sending rotation packet... {sensor.rotation}");
-                var packet = PacketBuilder.BuildRotationPacket(sensor.index, _packetNumber++, sensor.rotation);
-                // All non-handshake packets are unicast to the discovered server endpoint
-                if (_serverEndpoint != null)
-                {
-                    await _udpClient.SendAsync(packet, packet.Length, _serverEndpoint);
-                }
-                packet = PacketBuilder.BuildAccelerationPacket(sensor.index, _packetNumber++, sensor.acceleration);
-                // All non-handshake packets are unicast to the discovered server endpoint
-                if (_serverEndpoint != null)
-                {
-                    await _udpClient.SendAsync(packet, packet.Length, _serverEndpoint);
-                }                
-            }
-        }
-
-        static byte[] GenerateMacAddress(uint index)
-        {
-            // 02:00:00:00:00:XX (locally administered)
-            return new byte[] { 0x02, 0x00, 0x00, 0x00, 0x00, (byte)index };
-        }
-
-        // Monitors for packet timeout and triggers rediscovery if no packets are received for 10 seconds
-        private async Task MonitorPacketTimeAsync(CancellationToken token)
-        {
-            _lastPacket = DateTime.UtcNow;
-            while (!token.IsCancellationRequested)
-            {
-                await Task.Delay(100, token);
-                if ((DateTime.UtcNow - _lastPacket).TotalSeconds > 1)
-                {
-                    // Timeout: clear server endpoint to break out of rotation loop
-                    _serverEndpoint = null;
-                    break;
-                }
             }
         }
     }
