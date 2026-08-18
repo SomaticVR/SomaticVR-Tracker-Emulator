@@ -29,27 +29,46 @@ namespace SomaticVR.TrackerEmulator
 {
     class Program
     {
+
         static async Task Main(string[] args)
         {
-            Console.WriteLine("Starting SomaticVR Tracker Emulator...");
+            Console.WriteLine("SomaticVR Full Body Emulator");
+            Console.WriteLine("Make sure the SomaticVR server is running before proceeding.\n");
 
-            var manager = new TrackerManager();
+            await using var emulator = new FullBodyEmulator();
 
-            // Initial state
-            EmulationStage currentStage = EmulationStage.InfoPacket;
+            var currentStage = EmulationStage.BridgeConnection;
+            CancellationTokenSource? statusLoopCts = null;
+            Task? statusLoopTask = null;
 
             while (true)
             {
                 switch (currentStage)
                 {
-                    case EmulationStage.InfoPacket:
-                        await RunInfoPacketStage(manager);
+                    case EmulationStage.BridgeConnection:
+                        await RunBridgeConnectionStage(emulator);
+                        currentStage = EmulationStage.BridgeDeviceHandshake;
+                        break;
+
+                    case EmulationStage.BridgeDeviceHandshake:
+                        await RunHandshakeStage(emulator);
+                        statusLoopCts = new CancellationTokenSource();
+                        statusLoopTask = emulator.SendBridgeDevicesPositionsLoopAsync(statusLoopCts.Token);
+                        currentStage = EmulationStage.DeviceInfoPacket;
+                        break;
+
+                    case EmulationStage.DeviceInfoPacket:
+                        Console.WriteLine("[Stage] Sending device info packet...");
+                        await RunInfoPacketStage(emulator);
                         currentStage = EmulationStage.FullReset;
                         break;
 
                     case EmulationStage.FullReset:
+                        statusLoopCts?.Cancel();
+                        try { if (statusLoopTask != null) await statusLoopTask; }
+                        catch (OperationCanceledException) { }
                         await RunUserTriggeredStage(
-                            manager,
+                            emulator,
                             EmulationStage.FullReset,
                             "Please start the FULL RESET in the SomaticVR GUI then press SPACE when complete."
                         );
@@ -58,7 +77,7 @@ namespace SomaticVR.TrackerEmulator
 
                     case EmulationStage.ResetMounting:
                         await RunUserTriggeredStage(
-                            manager,
+                            emulator,
                             EmulationStage.ResetMounting,
                             "Please start the RESET MOUNTING in the SomaticVR GUI then press SPACE when complete."
                         );
@@ -67,7 +86,7 @@ namespace SomaticVR.TrackerEmulator
 
                     case EmulationStage.SendData:
                         await RunUserTriggeredStage(
-                            manager,
+                            emulator,
                             EmulationStage.SendData,
                             "Sending Packet data to the SomaticVR GUI, press SPACE when complete."
                         );
@@ -77,13 +96,26 @@ namespace SomaticVR.TrackerEmulator
         }
 
         // --- STAGE HANDLERS ----------------------------------------------------
+        static async Task RunBridgeConnectionStage(FullBodyEmulator emulator)
+        {
+            Console.WriteLine("[Stage] Connecting to server bridge...");
+            await emulator.ConnectBridgeAsync();
+        }
 
-        static async Task RunInfoPacketStage(TrackerManager manager)
+        static async Task RunHandshakeStage(FullBodyEmulator emulator)
+        {
+            Console.WriteLine("[Stage] Starting handshake...");
+            await emulator.StartBridgeHandshakeAsync();
+            // Give the server a moment to process the tracker registrations
+            await Task.Delay(300);
+        }
+
+        static async Task RunInfoPacketStage(FullBodyEmulator emulator)
         {
             try
             {
                 Console.WriteLine("Sending SensorInfo packets...");
-                await manager.SendInfoPacketsAsync();
+                await emulator.SendDeviceInfoPacketsAsync();
                 Console.WriteLine("All trackers acknowledged SensorInfo.");
             }
             catch (Exception ex)
@@ -94,7 +126,7 @@ namespace SomaticVR.TrackerEmulator
         }
 
         static async Task RunUserTriggeredStage(
-            TrackerManager manager,
+            FullBodyEmulator emulator,
             EmulationStage stage,
             string userPrompt)
         {
@@ -103,7 +135,7 @@ namespace SomaticVR.TrackerEmulator
             Console.WriteLine();
 
             var cts = new CancellationTokenSource();
-            var task = manager.SendDataPacketsAsync(stage, cts.Token);
+            var task = emulator.SendDataPacketsAsync(stage, cts.Token);
 
             while (!task.IsCompleted)
             {
@@ -123,7 +155,9 @@ namespace SomaticVR.TrackerEmulator
 
             // Flush input buffer so next stage doesn't auto-cancel
             while (Console.KeyAvailable)
-                Console.ReadKey(intercept: true);
+            {
+                Console.ReadKey(intercept: true);                
+            }
 
             try
             {

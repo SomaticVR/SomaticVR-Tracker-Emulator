@@ -32,7 +32,7 @@ using System.Threading.Tasks;
 
 namespace SomaticVR.TrackerEmulator
 {
-    public class TrackerEmulator
+    public class TrackerEmulator : IAsyncDisposable
     {
         private DateTime _lastPacket = DateTime.MinValue;
         private CancellationTokenSource? _timeoutMonitorCts;
@@ -52,6 +52,9 @@ namespace SomaticVR.TrackerEmulator
         private bool _receivedServerFeatureFlags = false;
 
 
+        private readonly CancellationTokenSource _cts = new();
+        private Task _receiveTask = Task.CompletedTask;
+
         public TrackerEmulator(uint trackerIndex, uint numSensors, byte[] macAddress)
         {
             _trackerIndex = trackerIndex;
@@ -64,199 +67,169 @@ namespace SomaticVR.TrackerEmulator
                 var sensor = new SensorEmulator(i);
                 _sensors.Add(sensor);
             }
+
+            Console.WriteLine(_udpClient.GetType().FullName);
+        }
+
+        public async Task StartAsync()
+        {
+            // Start background listener
+            _receiveTask = ListenForServerAsync(_cts.Token);
         }
 
         public async Task SendInfoPacketAsync()
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            bool foundServer = await TryFindServerAsync(cts.Token);
-            if (!foundServer)
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+            if (!await TryFindServerAsync(timeoutCts.Token))
             {
-                throw new Exception($"Tracker {_trackerIndex}: Failed to find server after 10 seconds.");
+                throw new Exception($"Tracker {_trackerIndex}: Failed to find server after 10 seconds.");                
             }
 
             foreach (var sensor in _sensors)
             {
-                Console.WriteLine($"Tracker {_trackerIndex}: Sending SensorInfo packet for Sensor {sensor.index}...");
-                var sensorInfoPacket = PacketBuilder.BuildSensorInfoPacket(_packetNumber++, sensor);
-
+                var packet = PacketBuilder.BuildSensorInfoPacket(_packetNumber++, sensor);
                 if (_serverEndpoint != null)
                 {
-                    await _udpClient.SendAsync(sensorInfoPacket, sensorInfoPacket.Length, _serverEndpoint);                    
+                    await _udpClient.SendAsync(packet, packet.Length, _serverEndpoint);                    
                 }
             }
         }
 
         public async Task SendDataPacketAsync(byte[] packetData)
         {
-            if (_serverEndpoint != null)
+            if (_serverEndpoint == null)
             {
-                await _udpClient.SendAsync(packetData, packetData.Length, _serverEndpoint);
-                return;
-            }
-
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            bool foundServer = await TryFindServerAsync(cts.Token);
-            if (!foundServer)
-            {
-                throw new Exception($"Tracker {_trackerIndex}: Failed to find server after 10 seconds.");
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                if (!await TryFindServerAsync(timeoutCts.Token))
+                {
+                    throw new Exception($"Tracker {_trackerIndex}: Failed to find server after 10 seconds.");                    
+                }
             }
 
             if (_serverEndpoint != null)
             {
-                await _udpClient.SendAsync(packetData, packetData.Length, _serverEndpoint);
+                await _udpClient.SendAsync(packetData, packetData.Length, _serverEndpoint);                
             }
         }
 
         // Attempts to find the server, retrying every second for up to 30 seconds
-        async Task<bool> TryFindServerAsync(CancellationToken cancellationToken)
+        private async Task<bool> TryFindServerAsync(CancellationToken ct)
         {
             for (int attempt = 1; attempt <= 30; attempt++)
             {
-                //Console.WriteLine($"Tracker {_trackerIndex}: Attempt {attempt}/30 to find server...");
                 await SendHandshakeAsync();
-                var found = await WaitForServerAsync(1000, cancellationToken);
-                if (found)
+                if (await WaitForServerAsync(1000, ct))
                 {
-                    return true;
+                    return true;                    
                 }
             }
             return false;
         }
 
+
         // Waits for a server response for a given timeout
-        async Task<bool> WaitForServerAsync(int timeoutMs, CancellationToken cancellationToken)
+        private async Task<bool> WaitForServerAsync(int timeoutMs, CancellationToken ct)
         {
-            var task = _udpClient.ReceiveAsync();
-            var delayTask = Task.Delay(timeoutMs, cancellationToken);
-            var completed = await Task.WhenAny(task, delayTask);
-            if (completed == task && !cancellationToken.IsCancellationRequested)
+            var receiveTask = _udpClient.ReceiveAsync(ct).AsTask();
+            var timeoutTask = Task.Delay(timeoutMs, ct);
+
+            var completed = await Task.WhenAny(receiveTask, timeoutTask);
+
+            if (completed == receiveTask && !ct.IsCancellationRequested)
             {
-                var result = task.Result;
+                var result = await receiveTask;
+
                 if (_serverEndpoint == null)
                 {
                     _serverEndpoint = result.RemoteEndPoint;
-                    Console.WriteLine($"Tracker {_trackerIndex}: Server discovered at {_serverEndpoint}");
                     ProcessIncomingPacket(result.Buffer, _serverEndpoint);
                 }
+
                 return true;
             }
             return false;
         }
 
-        async Task SendHandshakeAsync()
+        private async Task SendHandshakeAsync()
         {
             var packet = PacketBuilder.BuildHandshakePacket(_macAddress);
             var broadcastEndpoint = new IPEndPoint(IPAddress.Broadcast, BroadcastPort);
-            // Handshake is always broadcast
             await _udpClient.SendAsync(packet, packet.Length, broadcastEndpoint);
         }
 
-        async Task ListenForServerAsync(CancellationToken token)
+        private async Task ListenForServerAsync(CancellationToken ct)
         {
-            _lastPacket = DateTime.UtcNow;
-            while (!token.IsCancellationRequested)
+            try
             {
-                var result = await _udpClient.ReceiveAsync();
-                if (_serverEndpoint == null)
+                while (!ct.IsCancellationRequested)
                 {
-                    _serverEndpoint = result.RemoteEndPoint;
-                    Console.WriteLine($"Tracker {_trackerIndex}: Server discovered at {_serverEndpoint}");
-                }
-                // Process all incoming packets
-                ProcessIncomingPacket(result.Buffer, result.RemoteEndPoint);
+                    var result = await _udpClient.ReceiveAsync(ct);
 
-                await Task.Delay(100, token);
-                if ((DateTime.UtcNow - _lastPacket).TotalSeconds > 1)
-                {
-                    // Timeout: clear server endpoint to break out of rotation loop
-                    _serverEndpoint = null;
-                    break;
+                    if (_serverEndpoint == null)
+                    {
+                        _serverEndpoint = result.RemoteEndPoint;                        
+                    }
+
+                    ProcessIncomingPacket(result.Buffer, result.RemoteEndPoint);
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal shutdown
+            }
+            catch (ObjectDisposedException)
+            {
+                // Socket disposed during shutdown
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Tracker {_trackerIndex}: Receive loop error: {ex.Message}");
             }
         }
 
-        async Task SendFeatureFlagsPacketAsync()
+        private void ProcessIncomingPacket(byte[] data, IPEndPoint remote)
         {
-            int attempts = 0;
-            while (!_receivedServerFeatureFlags && attempts < 15)
+            if (data.Length < 4)
             {
-                if (_serverEndpoint != null)
-                {
-                    var packet = PacketBuilder.BuildFeatureFlagsPacket();
-                    await _udpClient.SendAsync(packet, packet.Length, _serverEndpoint);
-                }
-                attempts++;
-                await Task.Delay(100);
-            }
-        }
-
-        // Template for processing incoming UDP packets
-        void ProcessIncomingPacket(byte[] data, IPEndPoint remote)
-        {
-            if (data == null || data.Length < 4)
                 return;
-            // Packet ID is first 4 bytes (big-endian) or first byte is 0x03 for handshake response
-            _lastPacket = DateTime.UtcNow;
-            uint packetId = 0;
-            if (data[0] == 0x03) // Handshake response
-                packetId = 0x03;
-            else 
-                packetId = (uint) BitConverter.ToInt32(data.Take(4).Reverse().ToArray(), 0);
-            // Example switch for packet types
-            byte[]? packet = null;
-            switch (packetId)
-            {
-                case 1: // Heartbeat
-                    //Console.WriteLine($"Received Heartbeat from {remote}");
-                    packet = PacketBuilder.BuildHeartbeatPacket();
-                    break;
-                case 3: // Handshake response
-                    //Console.WriteLine($"Received Handshake response from {remote}");
-                    break;
-                case 10: // Ping/Pong
-                    // Console.WriteLine($"Received Ping/Pong from {remote}");
-                    packet = PacketBuilder.BuildPingPongPacket(data);
-                    break;
-                case 15: // Sensor Info ACK
-                    Console.WriteLine($"Received Sensor Info ACK from {remote}");
-                    SensorInfoAckReceived = true;
-                    // SensorInfoPacket sensorInfoPacket;
-                    // memcpy(&sensorInfoPacket, m_Packet + 4, sizeof(sensorInfoPacket));
+            }
 
-                    // for (int i = 0; i < (int)sensors.size(); i++) {
-                    //     if (sensorInfoPacket.sensorId == sensors[i]->getSensorId()) {
-                    //         m_AckedSensorState[i] = sensorInfoPacket.sensorState;
-                    //         if (len < 12) {
-                    //             m_AckedSensorCalibration[i]
-                    //                 = sensors[i]->hasCompletedRestCalibration();
-                    //             m_AckedSensorConfigData[i] = sensors[i]->getSensorConfigData();
-                    //             break;
-                    //         }
-                    //         m_AckedSensorCalibration[i]
-                    //             = sensorInfoPacket.hasCompletedRestCalibration;
-                    //         break;
-                    //     }
-                    break;
-                case 22:
-                    // Server feature flags
-                    _receivedServerFeatureFlags = true; // End SendFeatureFlagsPacketAsync early
-                    break;
-                case 24: // Ack Config Change
-                    Console.WriteLine($"Received Ack Config Change from {remote}");
-                    // TODO: Handle config change ack
-                    break;
-                // Add more cases for other packet types as needed
-                default:
-                    Console.WriteLine($"Received unknown packet ID {packetId} from {remote}");
-                    Console.WriteLine($"Received packet {BitConverter.ToString(data)}");
-                    break;
-            }
-            // If we have a packet to send back, send it to the server endpoint
-            if (packet != null && _serverEndpoint != null)
+            uint packetId =
+                data[0] == 0x03
+                ? 0x03
+                : (uint)BitConverter.ToInt32(data.Take(4).Reverse().ToArray(), 0);
+
+            byte[]? response = packetId switch
             {
-                _udpClient.SendAsync(packet, packet.Length, _serverEndpoint);
+                1 => PacketBuilder.BuildHeartbeatPacket(),
+                10 => PacketBuilder.BuildPingPongPacket(data),
+                15 => HandleSensorInfoAck(remote),
+                _ => null
+            };
+
+            if (response != null && _serverEndpoint != null)
+            {
+                _udpClient.SendAsync(response, response.Length, _serverEndpoint);                
             }
+        }
+
+        private byte[]? HandleSensorInfoAck(IPEndPoint remote)
+        {
+            Console.WriteLine($"Received Sensor Info ACK from {remote}");
+            SensorInfoAckReceived = true;
+            return null;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            _cts.Cancel();
+
+            try { await _receiveTask.ConfigureAwait(false); }
+            catch { }
+
+            _udpClient.Dispose();
+            _cts.Dispose();
         }
     }
 }

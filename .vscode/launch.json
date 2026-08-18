@@ -9,7 +9,7 @@
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "stopAtEntry": false,
-            "justMyCode": true
+            "justMyCode": false
         }
     ]
 }
