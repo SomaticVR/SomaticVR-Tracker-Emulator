@@ -4,3 +4,7 @@ obj/
 *.suo
 *.cache
 .vs/
+
+// old data files
+
+archiveddata/

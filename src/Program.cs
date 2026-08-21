@@ -81,6 +81,42 @@ namespace SomaticVR.TrackerEmulator
                             EmulationStage.ResetMounting,
                             "Please start the RESET MOUNTING in the SomaticVR GUI then press SPACE when complete."
                         );
+                        currentStage = EmulationStage.FootMounting;
+                        break;
+                        
+                    case EmulationStage.FootMounting:
+                        await RunUserTriggeredStage(
+                            emulator,
+                            EmulationStage.FootMounting,
+                            "Please start the FOOT MOUNTING in the SomaticVR GUI then press SPACE when complete."
+                        );
+                        currentStage = EmulationStage.StandingStayAligned;
+                        break;
+
+                    case EmulationStage.StandingStayAligned:
+                        await RunUserTriggeredStage(
+                            emulator,
+                            EmulationStage.StandingStayAligned,
+                            "Please start the STANDING STAY ALIGNED in the SomaticVR GUI then press SPACE when complete."
+                        );
+                        currentStage = EmulationStage.ChairStayAligned;
+                        break;
+
+                    case EmulationStage.ChairStayAligned:
+                        await RunUserTriggeredStage(
+                            emulator,
+                            EmulationStage.ChairStayAligned,
+                            "Please start the CHAIR STAY ALIGNED in the SomaticVR GUI then press SPACE when complete."
+                        );
+                        currentStage = EmulationStage.FloorStayAligned;
+                        break;
+
+                    case EmulationStage.FloorStayAligned:
+                        await RunUserTriggeredStage(
+                            emulator,
+                            EmulationStage.FloorStayAligned,
+                            "Please start the FLOOR STAY ALIGNED in the SomaticVR GUI then press SPACE when complete."
+                        );
                         currentStage = EmulationStage.SendData;
                         break;
 

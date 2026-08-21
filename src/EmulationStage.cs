@@ -7,6 +7,10 @@ namespace SomaticVR.TrackerEmulator
         DeviceInfoPacket,
         FullReset,
         ResetMounting,
+        FootMounting,
+        StandingStayAligned,
+        ChairStayAligned,
+        FloorStayAligned,
         SendData
     }
 }

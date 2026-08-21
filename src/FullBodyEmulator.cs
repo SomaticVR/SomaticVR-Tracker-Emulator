@@ -69,9 +69,13 @@ namespace SomaticVR.TrackerEmulator
         {
             string fileName = stage switch
             {
-                EmulationStage.FullReset      => "data\\FullResetStance.jsonl",
-                EmulationStage.ResetMounting  => "data\\MountingResetStance.jsonl",
-                EmulationStage.SendData       => "data\\RotationAccelerationData.jsonl",
+                EmulationStage.FullReset           => "data\\FullResetStance.jsonl",
+                EmulationStage.ResetMounting       => "data\\MountingResetStance.jsonl",
+                EmulationStage.FootMounting        => "data\\FootMountingResetStance.jsonl",
+                EmulationStage.StandingStayAligned => "data\\FullResetStance.jsonl",
+                EmulationStage.ChairStayAligned    => "data\\StayAlignedChair.jsonl",
+                EmulationStage.FloorStayAligned    => "data\\StayAlignedFloor.jsonl",
+                EmulationStage.SendData            => "data\\RotationAccelerationData.jsonl",
                 _ => throw new ArgumentException("Invalid setup stage", nameof(stage))
             };
 

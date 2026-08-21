@@ -25,15 +25,8 @@ namespace SomaticVR.TrackerEmulator
         private const int RoleRightController = 14;
 
         public const int TrackerIdHmd             = 0; // server detects HMD by id == 0
-        public const int TrackerIdLeftController  = 9; // Assigned by SteamVR
-        public const int TrackerIdRightController = 10; // Assigned by SteamVR
-
-        public readonly List<string> RegisteredTrackerSerials = new()
-        {
-            "VRLINKHMDQUEST2",
-            "VRLINKQ2_Controller_Left",
-            "VRLINKQ2_Controller_Right"
-        };
+        public const int TrackerIdLeftController  = 1; // Assigned by SteamVR
+        public const int TrackerIdRightController = 2; // Assigned by SteamVR
 
         private readonly BridgeClient _client = new();
 
@@ -137,19 +130,6 @@ namespace SomaticVR.TrackerEmulator
 
                 await Task.Delay(50, ct).ConfigureAwait(false);
             }
-        }
-
-        public async Task SendBridgeDevicesPositionAsync(int trackerId, Vector3 position, Quaternion rotation, CancellationToken ct = default)
-        {
-            await _client.SendAsync(new ProtobufMessage
-            {
-                Position = new Position
-                {
-                    TrackerId = trackerId,
-                    X = position.X, Y = position.Y, Z = position.Z,
-                    Qx = rotation.X, Qy = rotation.Y, Qz = rotation.Z, Qw = rotation.W
-                }
-            }, ct).ConfigureAwait(false);
         }
 
         private void OnMessageReceived(ProtobufMessage message)
