@@ -37,20 +37,45 @@ namespace SomaticVR.TrackerEmulator
         private readonly BridgeManager BridgeManager;
         private readonly TrackerManager TrackerManager;
 
+        private readonly string _baseDirectory;
+        private readonly bool _isDeviceListBridgeEmpty;
+
         public FullBodyEmulator()
         {
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            _baseDirectory = Path.Combine(appData, "SomaticVR-Server-Backend", "EmulationData");
+            //_isDeviceListBridgeEmpty = new FileInfo(Path.Combine(_baseDirectory, "DeviceListBridge.jsonl")).Length == 0;
+            _isDeviceListBridgeEmpty = !File.ReadLines(Path.Combine(_baseDirectory, "DeviceListBridge.jsonl")).Any(line => !string.IsNullOrWhiteSpace(line));
+
+            if (_isDeviceListBridgeEmpty)
+            {
+                Console.WriteLine("[Emulator] DeviceListBridge.jsonl is empty. Skipping bridge connection and handshake.");
+            }
+            else
+            {
+                Console.WriteLine("[Emulator] DeviceListBridge.jsonl is not empty. Will connect and handshake with bridge.");
+            }
+
             BridgeManager = new BridgeManager();
-            TrackerManager = new TrackerManager();
+            TrackerManager = new TrackerManager(_baseDirectory);
         }
 
         public async Task ConnectBridgeAsync(int timeoutMs = 10_000)
         {
-            await BridgeManager.ConnectAsync(timeoutMs);
+            // if bridge DeviceListBridge.jsonl is empty skip bridge connection
+            if (!_isDeviceListBridgeEmpty)
+            {
+                await BridgeManager.ConnectAsync(timeoutMs);
+            }
         }
 
         public async Task StartBridgeHandshakeAsync()
         {
-            await BridgeManager.StartHandshakeAsync();
+            // if bridge DeviceListBridge.jsonl is empty skip bridge handshake
+            if (!_isDeviceListBridgeEmpty)
+            {
+                await BridgeManager.StartHandshakeAsync();
+            }
         }
 
         public async Task SendDeviceInfoPacketsAsync()
@@ -60,24 +85,29 @@ namespace SomaticVR.TrackerEmulator
 
         public async Task SendBridgeDevicesPositionsLoopAsync(CancellationToken cancellationToken = default)
         {
-            await BridgeManager.SendBridgeDevicesPositionsLoopAsync(cancellationToken);
+            // if bridge DeviceListBridge.jsonl is empty skip
+            if (!_isDeviceListBridgeEmpty)
+            {
+                await BridgeManager.SendBridgeDevicesPositionsLoopAsync(cancellationToken);
+            }
         }
-    
         public async Task SendDataPacketsAsync(
             EmulationStage stage,
             CancellationToken cancellationToken = default)
         {
             string fileName = stage switch
             {
-                EmulationStage.FullReset           => "data\\FullResetStance.jsonl",
-                EmulationStage.ResetMounting       => "data\\MountingResetStance.jsonl",
-                EmulationStage.FootMounting        => "data\\FootMountingResetStance.jsonl",
-                EmulationStage.StandingStayAligned => "data\\FullResetStance.jsonl",
-                EmulationStage.ChairStayAligned    => "data\\StayAlignedChair.jsonl",
-                EmulationStage.FloorStayAligned    => "data\\StayAlignedFloor.jsonl",
-                EmulationStage.SendData            => "data\\RotationAccelerationData.jsonl",
+                EmulationStage.FullReset           => "ResetStanceFull.jsonl",
+                EmulationStage.ResetMounting       => "ResetStanceMounting.jsonl",
+                EmulationStage.FootMounting        => "ResetStanceFootMounting.jsonl",
+                EmulationStage.StandingStayAligned => "ResetStanceFull.jsonl",
+                EmulationStage.ChairStayAligned    => "StayAlignedStanceChair.jsonl",
+                EmulationStage.FloorStayAligned    => "StayAlignedStanceFloor.jsonl",
+                EmulationStage.SendData            => "RotationAccelerationData.jsonl",
                 _ => throw new ArgumentException("Invalid setup stage", nameof(stage))
             };
+
+            string filePath = Path.Combine(_baseDirectory, fileName);
 
             // Your measured frequency: 13200 writes / 10 seconds = 1320 Hz
             double hz = 13200.0 / 10.0;
@@ -86,7 +116,7 @@ namespace SomaticVR.TrackerEmulator
             var stopwatch = Stopwatch.StartNew();
             long nextSendTicks = stopwatch.ElapsedTicks;
 
-            await foreach (var line in ReadLinesLoopingAsync(fileName, cancellationToken))
+            await foreach (var line in ReadLinesLoopingAsync(filePath, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
 

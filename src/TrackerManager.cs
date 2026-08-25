@@ -53,9 +53,9 @@ namespace SomaticVR.TrackerEmulator
         
         private List<string> _macAddressStrings = new List<string>();
 
-        public TrackerManager()
+        public TrackerManager(string baseDirectory)
         {
-            string deviceListFileName = "data\\DeviceList.jsonl";
+            string deviceListFileName = Path.Combine(baseDirectory, "DeviceList.jsonl");
             if (File.Exists(deviceListFileName))
             {
                 foreach (var line in File.ReadLines(deviceListFileName))
