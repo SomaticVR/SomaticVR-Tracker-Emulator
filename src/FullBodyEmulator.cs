@@ -37,15 +37,12 @@ namespace SomaticVR.TrackerEmulator
         private readonly BridgeManager BridgeManager;
         private readonly TrackerManager TrackerManager;
 
-        private readonly string _baseDirectory;
+        //private readonly string _baseDirectory;
         private readonly bool _isDeviceListBridgeEmpty;
 
         public FullBodyEmulator()
         {
-            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            _baseDirectory = Path.Combine(appData, "SomaticVR-Server-Backend", "EmulationData");
-            //_isDeviceListBridgeEmpty = new FileInfo(Path.Combine(_baseDirectory, "DeviceListBridge.jsonl")).Length == 0;
-            _isDeviceListBridgeEmpty = !File.ReadLines(Path.Combine(_baseDirectory, "DeviceListBridge.jsonl")).Any(line => !string.IsNullOrWhiteSpace(line));
+            _isDeviceListBridgeEmpty = !File.ReadLines("EmulationData\\DeviceListBridge.jsonl").Any(line => !string.IsNullOrWhiteSpace(line));
 
             if (_isDeviceListBridgeEmpty)
             {
@@ -55,9 +52,9 @@ namespace SomaticVR.TrackerEmulator
             {
                 Console.WriteLine("[Emulator] DeviceListBridge.jsonl is not empty. Will connect and handshake with bridge.");
             }
-
+ 
             BridgeManager = new BridgeManager();
-            TrackerManager = new TrackerManager(_baseDirectory);
+            TrackerManager = new TrackerManager();
         }
 
         public async Task ConnectBridgeAsync(int timeoutMs = 10_000)
@@ -95,19 +92,19 @@ namespace SomaticVR.TrackerEmulator
             EmulationStage stage,
             CancellationToken cancellationToken = default)
         {
-            string fileName = stage switch
+            string filePath = stage switch
             {
-                EmulationStage.FullReset           => "ResetStanceFull.jsonl",
-                EmulationStage.ResetMounting       => "ResetStanceMounting.jsonl",
-                EmulationStage.FootMounting        => "ResetStanceFootMounting.jsonl",
-                EmulationStage.StandingStayAligned => "ResetStanceFull.jsonl",
-                EmulationStage.ChairStayAligned    => "StayAlignedStanceChair.jsonl",
-                EmulationStage.FloorStayAligned    => "StayAlignedStanceFloor.jsonl",
-                EmulationStage.SendData            => "RotationAccelerationData.jsonl",
+                EmulationStage.FullReset           => "EmulationData\\ResetStanceFull.jsonl",
+                EmulationStage.ResetMounting       => "EmulationData\\ResetStanceMounting.jsonl",
+                EmulationStage.FootMounting        => "EmulationData\\ResetStanceFootMounting.jsonl",
+                EmulationStage.StandingStayAligned => "EmulationData\\ResetStanceFull.jsonl",
+                EmulationStage.ChairStayAligned    => "EmulationData\\StayAlignedStanceChair.jsonl",
+                EmulationStage.FloorStayAligned    => "EmulationData\\StayAlignedStanceFloor.jsonl",
+                EmulationStage.SendData            => "EmulationData\\RotationAccelerationData.jsonl",
                 _ => throw new ArgumentException("Invalid setup stage", nameof(stage))
             };
 
-            string filePath = Path.Combine(_baseDirectory, fileName);
+            //string filePath = Path.Combine(_baseDirectory, fileName);
 
             // Your measured frequency: 13200 writes / 10 seconds = 1320 Hz
             double hz = 13200.0 / 10.0;

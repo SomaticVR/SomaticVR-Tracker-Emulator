@@ -48,7 +48,7 @@ namespace SomaticVR.TrackerEmulator
 
             await _client.SendAsync(new ProtobufMessage
             {
-                Version = new ProtobufVersion { ProtocolVersion = 1 }
+                Version = new ProtobufVersion { ProtocolVersion = 2 }
             });
 
             await _client.SendAsync(new ProtobufMessage

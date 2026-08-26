@@ -34,9 +34,6 @@ namespace SomaticVR.TrackerEmulator
 {
     public class TrackerEmulator : IAsyncDisposable
     {
-        private DateTime _lastPacket = DateTime.MinValue;
-        private CancellationTokenSource? _timeoutMonitorCts;
-        private CancellationTokenSource? _listenCts;
         private readonly uint _trackerIndex;
         // private readonly byte _trackerType = 0; // TRACKER_TYPE_SVR_ROTATION
         private readonly uint _numSensors;
@@ -49,7 +46,6 @@ namespace SomaticVR.TrackerEmulator
 
         private Int64 _packetNumber = 0; // Incremented for each packet sent
         private const int BroadcastPort = 6969; // Default SlimeVR UDP port
-        private bool _receivedServerFeatureFlags = false;
 
 
         private readonly CancellationTokenSource _cts = new();
