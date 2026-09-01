@@ -1,0 +1,268 @@
+server:
+  useMagnetometerOnAllTrackers: false
+  trackerPort: 6969
+filters:
+  type: PREDICTION
+  amount: 0.1
+driftCompensation:
+  enabled: false
+  prediction: false
+  amount: 0.8
+  maxResets: 6
+legTweaks:
+  correctionStrength: 0.3
+  alwaysUseFloorClip: false
+  floorLevel: -0.054272052
+tapDetection:
+  yawResetDelay: 0.2
+  fullResetDelay: 1
+  mountingResetDelay: 1
+  yawResetEnabled: true
+  fullResetEnabled: true
+  mountingResetEnabled: true
+  yawResetTaps: 2
+  fullResetTaps: 3
+  mountingResetTaps: 3
+  numberTrackersOverThreshold: 1
+resets:
+  resetMountingFeet: false
+  mode: BACK
+  yawResetSmoothTime: 0
+  saveMountingReset: false
+  resetHmdPitch: false
+  lastMountingMethod: AUTOMATIC
+  yawResetDelay: 0
+  fullResetDelay: 0
+  mountingResetDelay: 0
+skeleton:
+  offsets:
+    headShift: 0.1
+    neckLength: 0.1
+    upperChestLength: 0.16
+    chestLength: 0.16
+    chestOffset: 0
+    waistLength: 0.2
+    hipLength: 0.04
+    hipOffset: 0
+    hipsWidth: 0.26
+    upperLegLength: 0.42
+    lowerLegLength: 0.5
+    footLength: 0.05
+    footShift: -0.05
+    skeletonOffset: 0
+    shouldersDistance: 0.08
+    shouldersWidth: 0.35
+    upperArmLength: 0.26
+    lowerArmLength: 0.26
+    handDistanceY: 0.035
+    handDistanceZ: 0.13
+    elbowOffset: 0
+  toggles:
+    forceArmsFromHMD: true
+    skatingCorrection: true
+    toeSnap: true
+    footPlant: true
+    usePosition: true
+  values:
+    waistFromChestHipAveraging: 0
+    waistFromChestLegsAveraging: 0
+    hipFromChestLegsAveraging: 0
+    hipFromWaistLegsAveraging: 0
+    hipLegsAveraging: 0
+    kneeTrackerAnkleAveraging: 0
+    kneeAnkleAveraging: 0
+  hmdHeight: 0
+  floorHeight: 0
+autoBone:
+  cursorIncrement: 2
+  minDataDistance: 1
+  maxDataDistance: 1
+  numEpochs: 50
+  printEveryNumEpochs: 25
+  initialAdjustRate: 10
+  adjustRateDecay: 1
+  slideErrorFactor: 1
+  offsetSlideErrorFactor: 0
+  footHeightOffsetErrorFactor: 0
+  bodyProportionErrorFactor: 0.05
+  heightErrorFactor: 0
+  positionErrorFactor: 0
+  positionOffsetErrorFactor: 0
+  calcInitError: false
+  randomizeFrameOrder: true
+  scaleEachStep: true
+  sampleCount: 1500
+  sampleRateMs: 20
+  saveRecordings: false
+  useSkeletonHeight: false
+  randSeed: 4
+  useFrameFiltering: false
+  maxFinalError: 0.3
+osc:
+  enabled: false
+  portIn: 0
+  portOut: 0
+  address: 127.0.0.1
+vrcOsc:
+  trackers: {}
+  oscqueryEnabled: true
+  enabled: false
+  portIn: 0
+  portOut: 0
+  address: 127.0.0.1
+vmc:
+  anchorHip: true
+  vrmJson: 
+  mirrorTracking: false
+  enabled: false
+  portIn: 0
+  portOut: 0
+  address: 127.0.0.1
+vrc:
+  mutedWarnings: []
+trackers:
+  VRLINKHMDQUEST2:
+    name: 
+    customName: 
+    designation: body:head
+    hide: false
+    allowDriftCompensation: true
+    shouldHaveMagEnabled: true
+    mountingOrientation: 
+    adjustments: 
+    mountingResetOrientation: 
+  VRLINKQ2_Controller_Left:
+    name: 
+    customName: 
+    designation: body:left_hand
+    hide: false
+    allowDriftCompensation: true
+    shouldHaveMagEnabled: true
+    mountingOrientation: 
+    adjustments: 
+    mountingResetOrientation: 
+  VRLINKQ2_Controller_Right:
+    name: 
+    customName: 
+    designation: body:right_hand
+    hide: false
+    allowDriftCompensation: true
+    shouldHaveMagEnabled: true
+    mountingOrientation: 
+    adjustments: 
+    mountingResetOrientation: 
+  udp://A0:85:E3:1B:C5:EC/0:
+    name: 
+    customName: 
+    designation: body:chest
+    hide: false
+    allowDriftCompensation: false
+    shouldHaveMagEnabled: true
+    mountingOrientation: &o1
+      x: 0
+      y: 1
+      z: 0
+      w: 0
+      isIdentity: false
+    adjustments: 
+    mountingResetOrientation: 
+  udp://98:3D:AE:B0:56:A8/0:
+    name: 
+    customName: 
+    designation: body:waist
+    hide: false
+    allowDriftCompensation: false
+    shouldHaveMagEnabled: true
+    mountingOrientation: &o0
+      x: 0
+      y: 0.9238795
+      z: 0
+      w: 0.3826834
+      isIdentity: false
+    adjustments: 
+    mountingResetOrientation: 
+  udp://98:3D:AE:B1:07:DC/0:
+    name: 
+    customName: 
+    designation: body:right_upper_leg
+    hide: false
+    allowDriftCompensation: false
+    shouldHaveMagEnabled: true
+    mountingOrientation: &o2
+      x: 0
+      y: -0.9238795
+      z: 0
+      w: 0.3826834
+      isIdentity: false
+    adjustments: 
+    mountingResetOrientation: 
+  udp://98:3D:AE:AD:A5:70/0:
+    name: 
+    customName: 
+    designation: body:left_upper_leg
+    hide: false
+    allowDriftCompensation: false
+    shouldHaveMagEnabled: true
+    mountingOrientation: *o0
+    adjustments: 
+    mountingResetOrientation: 
+  udp://A0:85:E3:1C:E7:F0/0:
+    name: 
+    customName: 
+    designation: body:right_lower_leg
+    hide: false
+    allowDriftCompensation: false
+    shouldHaveMagEnabled: true
+    mountingOrientation: *o1
+    adjustments: 
+    mountingResetOrientation: 
+  udp://E8:06:90:6C:C5:2C/0:
+    name: 
+    customName: 
+    designation: body:left_lower_leg
+    hide: false
+    allowDriftCompensation: false
+    shouldHaveMagEnabled: true
+    mountingOrientation: *o2
+    adjustments: 
+    mountingResetOrientation: 
+knownDevices:
+- A0:85:E3:1B:C5:EC
+- 98:3D:AE:B0:56:A8
+- 98:3D:AE:B1:07:DC
+- 98:3D:AE:AD:A5:70
+- A0:85:E3:1C:E7:F0
+- E8:06:90:6C:C5:2C
+bridges:
+  steamvr:
+    trackers:
+      CHEST: true
+      WAIST: true
+      LEFT_KNEE: true
+      RIGHT_KNEE: true
+      LEFT_FOOT: true
+      RIGHT_FOOT: true
+      LEFT_ELBOW: true
+      RIGHT_ELBOW: true
+    automaticSharedTrackersToggling: true
+stayAligned:
+  enabled: true
+  hideYawCorrection: false
+  standingRelaxedPose:
+    enabled: true
+    upperLegAngleInDeg: 0
+    lowerLegAngleInDeg: 0
+    footAngleInDeg: 0
+  sittingRelaxedPose:
+    enabled: true
+    upperLegAngleInDeg: 0
+    lowerLegAngleInDeg: 0
+    footAngleInDeg: 0
+  flatRelaxedPose:
+    enabled: true
+    upperLegAngleInDeg: 0
+    lowerLegAngleInDeg: 0
+    footAngleInDeg: 0
+  setupComplete: false
+changeCount: 45
+lastChanged: 2026-09-01 09:27:31
