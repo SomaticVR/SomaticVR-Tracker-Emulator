@@ -82,6 +82,9 @@ namespace SomaticVR.TrackerEmulator
             bw.Write(BitConverter.GetBytes(3).Reverse().ToArray());
             // Packet number (int64, always 0)
             bw.Write(new byte[8]);
+            // Board type (int32, big endian). The server reads this field first; without it every
+            // later field shifts by 4 bytes and the MAC is read out of the firmware string.
+            bw.Write(BitConverter.GetBytes(27).Reverse().ToArray()); // SOMATICVR_ORION
             // IMU type (int32, big endian)
             bw.Write(BitConverter.GetBytes(9).Reverse().ToArray()); // ICM-20948
             // MCU type (int32)
