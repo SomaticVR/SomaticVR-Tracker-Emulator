@@ -1,4 +1,4 @@
-/*
+﻿/*
     SomaticVR Code is placed under the MIT license
     Copyright (c) 2025 Somatic VR, LLC
 
@@ -47,6 +47,12 @@ namespace SomaticVR.TrackerEmulator
         private Int64 _packetNumber = 0; // Incremented for each packet sent
         private const int BroadcastPort = 6969; // Default SlimeVR UDP port
         private bool _receivedServerFeatureFlags = false;
+
+        // Where the handshake goes. A real tracker broadcasts, so that is the default. macOS does not
+        // loop a 255.255.255.255 broadcast back to a listener on the same machine, so a backend
+        // running beside the emulator never sees it: SOMATICVR_EMULATOR_SERVER overrides the address
+        // with a host or host:port, e.g. SOMATICVR_EMULATOR_SERVER=127.0.0.1
+        private static readonly IPEndPoint HandshakeEndpoint = ResolveHandshakeEndpoint();
 
 
         public TrackerEmulator(uint trackerIndex, uint numSensors)
@@ -153,9 +159,41 @@ namespace SomaticVR.TrackerEmulator
         async Task SendHandshakeAsync()
         {
             var packet = PacketBuilder.BuildHandshakePacket(_macAddress);
-            var broadcastEndpoint = new IPEndPoint(IPAddress.Broadcast, BroadcastPort);
-            // Handshake is always broadcast
-            await _udpClient.SendAsync(packet, packet.Length, broadcastEndpoint);
+            // Broadcast unless SOMATICVR_EMULATOR_SERVER named a server (see HandshakeEndpoint)
+            await _udpClient.SendAsync(packet, packet.Length, HandshakeEndpoint);
+        }
+
+        static IPEndPoint ResolveHandshakeEndpoint()
+        {
+            var configured = Environment.GetEnvironmentVariable("SOMATICVR_EMULATOR_SERVER");
+            if (string.IsNullOrWhiteSpace(configured))
+            {
+                return new IPEndPoint(IPAddress.Broadcast, BroadcastPort);
+            }
+
+            var host = configured.Trim();
+            var port = BroadcastPort;
+
+            // host:port, taking the LAST colon so a bare IPv6 address is left intact
+            var separator = host.LastIndexOf(':');
+            if (separator > 0 && int.TryParse(host[(separator + 1)..], out var parsedPort))
+            {
+                port = parsedPort;
+                host = host[..separator];
+            }
+
+            if (!IPAddress.TryParse(host, out var address))
+            {
+                address = Array.Find(Dns.GetHostAddresses(host), a => a.AddressFamily == AddressFamily.InterNetwork);
+                if (address == null)
+                {
+                    Console.WriteLine($"SOMATICVR_EMULATOR_SERVER=\"{configured}\" did not resolve; broadcasting instead.");
+                    return new IPEndPoint(IPAddress.Broadcast, BroadcastPort);
+                }
+            }
+
+            Console.WriteLine($"Sending handshakes to {address}:{port} (SOMATICVR_EMULATOR_SERVER).");
+            return new IPEndPoint(address, port);
         }
 
         async Task ListenForServerAsync(CancellationToken token)
