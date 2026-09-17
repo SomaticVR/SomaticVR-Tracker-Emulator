@@ -1,4 +1,4 @@
-﻿/*
+/*
     SomaticVR Code is placed under the MIT license
     Copyright (c) 2025 Somatic VR, LLC
 
